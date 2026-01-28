@@ -1,91 +1,163 @@
-import { Router, Response } from 'express';
+import { Router } from 'express';
 import prisma from '../config/database';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { logInfo } from '../utils/logger';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
-router.get('/', async (req: AuthRequest, res: Response) => {
-  const { search, isDead } = req.query;
-
-  const plants = await prisma.plant.findMany({
-    where: {
-      ...(search && { name: { contains: String(search), mode: 'insensitive' } }),
-      ...(isDead !== undefined && { isDead: isDead === 'true' }),
-    },
-    include: { species: true, user: { select: { id: true, username: true } } },
-  });
-
-  res.json(plants);
-});
-
-router.get('/:id', async (req: AuthRequest, res: Response) => {
-  const plant = await prisma.plant.findUnique({
-    where: { id: Number(req.params.id) },
-    include: { species: true, user: { select: { id: true, username: true } } },
-  });
-
-  if (!plant) return res.status(404).json({ error: 'Plant not found' });
-  res.json(plant);
-});
-
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { name, speciesId } = req.body;
-
-  if (!name || !speciesId) {
-    return res.status(400).json({ error: 'Name and speciesId required' });
+// GET all plants for current user
+router.get('/', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const plants = await prisma.plant.findMany({
+      where: { 
+        userId: req.user!.id,
+        isDead: false 
+      },
+      include: { species: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(plants);
+  } catch (error) {
+    logger.error('Failed to fetch plants');
+    res.status(500).json({ error: 'Failed to fetch plants' });
   }
-
-  const plant = await prisma.plant.create({
-    data: { name, speciesId, userId: req.user?.userId, currentWater: 100 },
-    include: { species: true },
-  });
-
-  logInfo(`Plant created: ${name}`);
-  res.status(201).json(plant);
 });
 
-router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { name, currentWater, isDead } = req.body;
-
-  const plant = await prisma.plant.update({
-    where: { id: Number(req.params.id) },
-    data: {
-      ...(name && { name }),
-      ...(currentWater !== undefined && { currentWater }),
-      ...(isDead !== undefined && { isDead }),
-    },
-    include: { species: true },
-  });
-
-  logInfo(`Plant updated: ${plant.name}`);
-  res.json(plant);
+// GET dead plants for current user
+router.get('/dead', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const plants = await prisma.plant.findMany({
+      where: { 
+        userId: req.user!.id,
+        isDead: true 
+      },
+      include: { species: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(plants);
+  } catch (error) {
+    logger.error('Failed to fetch dead plants');
+    res.status(500).json({ error: 'Failed to fetch dead plants' });
+  }
 });
 
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
-  await prisma.plant.delete({ where: { id: Number(req.params.id) } });
-  logInfo(`Plant deleted: ${req.params.id}`);
-  res.json({ message: 'Plant deleted' });
+// GET single plant
+router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const plant = await prisma.plant.findFirst({
+      where: { 
+        id: parseInt(req.params.id),
+        userId: req.user!.id 
+      },
+      include: { species: true, logs: true },
+    });
+    if (!plant) {
+      return res.status(404).json({ error: 'Plant not found' });
+    }
+    res.json(plant);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch plant' });
+  }
 });
 
-router.post('/:id/water', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const plant = await prisma.plant.findUnique({ where: { id: Number(req.params.id) } });
+// CREATE plant for current user
+router.post('/', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { name, speciesId } = req.body;
+    const plant = await prisma.plant.create({
+      data: {
+        name,
+        speciesId: parseInt(speciesId),
+        userId: req.user!.id,
+        currentWater: 100,
+      },
+      include: { species: true },
+    });
+    
+    await prisma.log.create({
+      data: {
+        message: `Plant "${name}" created`,
+        level: 'INFO',
+        plantId: plant.id,
+      },
+    });
+    
+    logger.info(`Plant created: ${name}`);
+    res.status(201).json(plant);
+  } catch (error) {
+    logger.error('Failed to create plant');
+    res.status(500).json({ error: 'Failed to create plant' });
+  }
+});
 
-  if (!plant) return res.status(404).json({ error: 'Plant not found' });
-  if (plant.isDead) return res.status(400).json({ error: 'Plant is dead' });
+// UPDATE plant
+router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const existing = await prisma.plant.findFirst({
+      where: { id: parseInt(req.params.id), userId: req.user!.id },
+    });
+    
+    if (!existing) {
+      return res.status(404).json({ error: 'Plant not found' });
+    }
 
-  const updated = await prisma.plant.update({
-    where: { id: plant.id },
-    data: { currentWater: 100 },
-    include: { species: true },
-  });
+    const { name, currentWater } = req.body;
+    const plant = await prisma.plant.update({
+      where: { id: parseInt(req.params.id) },
+      data: { name, currentWater: parseFloat(currentWater) },
+      include: { species: true },
+    });
+    res.json(plant);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update plant' });
+  }
+});
 
-  await prisma.log.create({
-    data: { message: `Plant "${plant.name}" watered`, level: 'INFO', plantId: plant.id },
-  });
+// DELETE plant
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const plant = await prisma.plant.findFirst({
+      where: { id: parseInt(req.params.id), userId: req.user!.id },
+      include: { species: true },
+    });
+    
+    if (!plant) {
+      return res.status(404).json({ error: 'Plant not found' });
+    }
 
-  logInfo(`Plant watered: ${plant.name}`);
-  res.json(updated);
+    // Create deletion log before deleting
+    await prisma.log.create({
+      data: {
+        message: `Plant "${plant.name}" (${plant.species.name}) was deleted by user`,
+        level: 'WARNING',
+      },
+    });
+
+    await prisma.plant.delete({
+      where: { id: parseInt(req.params.id) },
+    });
+    
+    logger.info(`Plant deleted: ${plant.name}`);
+    res.json({ message: 'Plant deleted', deletedPlant: plant.name });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete plant' });
+  }
+});
+
+// SEARCH plants for current user
+router.get('/search/:pattern', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const plants = await prisma.plant.findMany({
+      where: {
+        userId: req.user!.id,
+        name: { contains: req.params.pattern, mode: 'insensitive' },
+      },
+      include: { species: true },
+    });
+    res.json(plants);
+  } catch (error) {
+    res.status(500).json({ error: 'Search failed' });
+  }
 });
 
 export default router;
