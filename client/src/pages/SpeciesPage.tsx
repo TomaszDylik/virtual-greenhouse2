@@ -19,8 +19,13 @@ export default function SpeciesPage() {
   const [editDryingRate, setEditDryingRate] = useState('');
 
   const fetchSpecies = async () => {
-    const res = await speciesApi.getAll();
-    setSpeciesList(res.data);
+    try {
+      const res = await speciesApi.getAll();
+      setSpeciesList(res.data);
+    } catch (error: any) {
+      console.error('Failed to fetch species', error);
+      alert(error.response?.data?.error || 'Failed to fetch species list.');
+    }
   };
 
   useEffect(() => {
@@ -29,11 +34,20 @@ export default function SpeciesPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName || !newDryingRate) return;
-    await speciesApi.create({ name: newName, dryingRate: parseFloat(newDryingRate) });
-    setNewName('');
-    setNewDryingRate('');
-    fetchSpecies();
+    if (!newName || !newDryingRate) {
+      alert('Please fill in all fields');
+      return;
+    }
+    try {
+      await speciesApi.create({ name: newName, dryingRate: parseFloat(newDryingRate) });
+      setNewName('');
+      setNewDryingRate('');
+      fetchSpecies();
+      alert('Species created successfully! 🌿');
+    } catch (error: any) {
+      console.error('Failed to create species', error);
+      alert(error.response?.data?.error || 'Failed to create species. Please try again.');
+    }
   };
 
   const handleEdit = (species: Species) => {
@@ -43,18 +57,30 @@ export default function SpeciesPage() {
   };
 
   const handleUpdate = async (id: number) => {
-    await speciesApi.update(id, { 
-      name: editName, 
-      dryingRate: parseFloat(editDryingRate) 
-    });
-    setEditingId(null);
-    fetchSpecies();
+    try {
+      await speciesApi.update(id, { 
+        name: editName, 
+        dryingRate: parseFloat(editDryingRate) 
+      });
+      setEditingId(null);
+      fetchSpecies();
+      alert('Species updated successfully! ✅');
+    } catch (error: any) {
+      console.error('Failed to update species', error);
+      alert(error.response?.data?.error || 'Failed to update species. Please try again.');
+    }
   };
 
   const handleDelete = async (id: number) => {
     if (window.confirm('Delete this species? All plants of this species will be deleted!')) {
-      await speciesApi.delete(id);
-      fetchSpecies();
+      try {
+        await speciesApi.delete(id);
+        fetchSpecies();
+        alert('Species deleted successfully! 🗑️');
+      } catch (error: any) {
+        console.error('Failed to delete species', error);
+        alert(error.response?.data?.error || 'Failed to delete species. Please try again.');
+      }
     }
   };
 
@@ -65,6 +91,7 @@ export default function SpeciesPage() {
           <h1 className="text-2xl font-bold">🌱 Species Management</h1>
           <div className="flex items-center gap-4">
             <Link to="/" className="hover:underline">← Dashboard</Link>
+            <Link to="/logs" className="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded">📋 Logs</Link>
             <span>{user?.username}</span>
             <button onClick={logout} className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">
               Logout

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: 'http://localhost:4000',
+  baseURL: 'http://localhost:4000/api',
 });
 
 api.interceptors.request.use((config) => {
@@ -35,6 +35,8 @@ export const speciesApi = {
 
 // Logs API
 export const logsApi = {
-  getAll: () => api.get('/logs'),
+  getAll: (search?: string) => api.get('/logs', { params: { search } }),
   getByPlant: (plantId: number) => api.get(`/logs/plant/${plantId}`),
 };
+
+export default api;
