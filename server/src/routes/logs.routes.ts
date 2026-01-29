@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../config/database';
-import { authMiddleware, adminOnly, AuthRequest } from '../middleware/auth';
-import { logInfo } from '../utils/logger';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -39,11 +39,11 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     data: { message, level: level || 'INFO', plantId: plantId || null },
   });
 
-  logInfo(`Log created: ${message}`);
+  logger.info(`Log created: ${message}`);
   res.status(201).json(log);
 });
 
-router.delete('/:id', authMiddleware, adminOnly, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   await prisma.log.delete({ where: { id: Number(req.params.id) } });
   res.json({ message: 'Log deleted' });
 });

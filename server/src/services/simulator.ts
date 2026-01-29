@@ -1,12 +1,12 @@
 import mqtt from 'mqtt';
 import prisma from '../config/database';
 import { MQTT_URL } from '../config/env';
-import { logInfo, logError } from '../utils/logger';
+import { logger } from '../utils/logger';
 
 const client = mqtt.connect(MQTT_URL);
 
 client.on('connect', () => {
-  logInfo('MQTT Simulator connected');
+  logger.info('MQTT Simulator connected');
 
   setInterval(async () => {
     try {
@@ -33,13 +33,13 @@ client.on('connect', () => {
         }));
       }
     } catch (err: any) {
-      logError(`Simulator error: ${err.message}`);
+      logger.error(`Simulator error: ${err.message}`);
     }
   }, 2000);
 });
 
 client.on('error', (err) => {
-  logError(`MQTT error: ${err.message}`);
+  logger.error(`MQTT error: ${err.message}`);
 });
 
 export { client as mqttClient };
