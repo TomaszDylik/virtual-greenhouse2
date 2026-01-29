@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { plantsApi, speciesApi } from '../services/api';
 import PlantCard from '../components/PlantCard';
 import AddPlantForm from '../components/AddPlantForm';
+import { Link } from 'react-router-dom';
 
 interface Plant {
   id: number;
@@ -66,6 +67,20 @@ export default function Dashboard() {
     }
   };
 
+  const handleWater = async (id: number) => {
+    try {
+      // Water the plant by adding 50% water (max 100%)
+      const plant = plants.find(p => p.id === id);
+      if (plant) {
+        const newWater = Math.min(100, plant.currentWater + 50);
+        await plantsApi.update(id, { currentWater: newWater });
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Failed to water plant');
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
@@ -78,6 +93,9 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold">🌱 Virtual Greenhouse</h1>
           <div className="flex items-center gap-4">
             <span>Welcome, {user?.username}!</span>
+            <Link to="/species" className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded">
+              🌿 Manage Species
+            </Link>
             <button
               onClick={logout}
               className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded"
@@ -108,8 +126,8 @@ export default function Dashboard() {
                 <PlantCard
                   key={plant.id}
                   plant={plant}
-                  onDelete={() => handleDelete(plant.id)}
-                  onWater={fetchData}
+                  onDelete={handleDelete}
+                  onWater={handleWater}
                 />
               ))}
             </div>
