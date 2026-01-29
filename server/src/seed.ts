@@ -1,47 +1,90 @@
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import prisma from './config/database';
 
-async function seed() {
-  console.log('Seeding database...');
+const prisma = new PrismaClient();
 
-  const adminPass = await bcrypt.hash('admin123', 10);
-  const userPass = await bcrypt.hash('user123', 10);
+async function main() {
+  // Clear existing data
+  await prisma.log.deleteMany();
+  await prisma.plant.deleteMany();
+  await prisma.species.deleteMany();
+  await prisma.user.deleteMany();
 
-  await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: {},
-    create: { username: 'admin', password: adminPass, role: 'ADMIN' },
+  // Create users
+  const user1 = await prisma.user.create({
+    data: {
+      username: 'user1',
+      password: await bcrypt.hash('user123', 10),
+    },
   });
 
-  await prisma.user.upsert({
-    where: { username: 'user' },
-    update: {},
-    create: { username: 'user', password: userPass, role: 'USER' },
+  const user2 = await prisma.user.create({
+    data: {
+      username: 'user2',
+      password: await bcrypt.hash('user123', 10),
+    },
   });
 
-  const tomato = await prisma.species.upsert({
-    where: { name: 'Tomato' },
-    update: {},
-    create: { name: 'Tomato', dryingRate: 2.0 },
+  const user3 = await prisma.user.create({
+    data: {
+      username: 'user3',
+      password: await bcrypt.hash('user123', 10),
+    },
   });
 
-  const cactus = await prisma.species.upsert({
-    where: { name: 'Cactus' },
-    update: {},
-    create: { name: 'Cactus', dryingRate: 0.5 },
+  // Create species
+  const tomato = await prisma.species.create({
+    data: { name: 'Pomidor', dryingRate: 5.0 },
   });
 
+  const cactus = await prisma.species.create({
+    data: { name: 'Kaktus', dryingRate: 1.0 },
+  });
+
+  const fern = await prisma.species.create({
+    data: { name: 'Paproć', dryingRate: 8.0 },
+  });
+
+  const rose = await prisma.species.create({
+    data: { name: 'Róża', dryingRate: 6.0 },
+  });
+
+  // Create plants for user1
   await prisma.plant.createMany({
-    skipDuplicates: true,
     data: [
-      { name: 'My Tomato', speciesId: tomato.id, currentWater: 100 },
-      { name: 'Office Cactus', speciesId: cactus.id, currentWater: 80 },
+      { name: 'Pomidor - balkon', speciesId: tomato.id, userId: user1.id, currentWater: 80 },
+      { name: 'Kaktus - kuchnia', speciesId: cactus.id, userId: user1.id, currentWater: 95 },
     ],
   });
 
-  console.log('Seed completed!');
+  // Create plants for user2
+  await prisma.plant.createMany({
+    data: [
+      { name: 'Paprotka - biuro', speciesId: fern.id, userId: user2.id, currentWater: 60 },
+      { name: 'Róża - ogród', speciesId: rose.id, userId: user2.id, currentWater: 45 },
+      { name: 'Dead Plant', speciesId: tomato.id, userId: user2.id, currentWater: 0, isDead: true },
+    ],
+  });
+
+  // user3 starts with no plants (new user scenario)
+
+  // Create some logs
+  await prisma.log.createMany({
+    data: [
+      { message: 'System started', level: 'INFO' },
+      { message: 'Database seeded', level: 'INFO' },
+    ],
+  });
+
+  console.log('✅ Seed completed!');
+  console.log('Users: user1, user2, user3 (password: user123)');
 }
 
-seed()
-  .catch((e) => console.error(e))
-  .finally(() => prisma.$disconnect());
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

@@ -12,14 +12,19 @@ function write(msg: string) {
   fs.appendFileSync(LOG_FILE, msg + '\n');
 }
 
-export function logInfo(msg: string) {
+function info(msg: string) {
   const line = `[${new Date().toISOString()}] [INFO] ${msg}`;
   console.log(line);
   write(line);
 }
 
-export function logError(msg: string) {
+function error(msg: string) {
   const line = `[${new Date().toISOString()}] [ERROR] ${msg}`;
   console.error(line);
   write(line);
 }
+
+export const logger = {
+  info,
+  error,
+};
