@@ -64,6 +64,11 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
 router.post('/', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { name, speciesId } = req.body;
+    
+    if (!name || !speciesId) {
+      return res.status(400).json({ error: 'Name and speciesId are required' });
+    }
+    
     const plant = await prisma.plant.create({
       data: {
         name,
@@ -85,7 +90,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
     logger.info(`Plant created: ${name}`);
     res.status(201).json(plant);
   } catch (error) {
-    logger.error('Failed to create plant');
+    logger.error(`Failed to create plant: ${error}`);
     res.status(500).json({ error: 'Failed to create plant' });
   }
 });

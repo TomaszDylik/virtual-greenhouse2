@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { plantsApi, speciesApi } from '../services/api';
 import PlantCard from '../components/PlantCard';
 import AddPlantForm from '../components/AddPlantForm';
 import { Link } from 'react-router-dom';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface Plant {
   id: number;
@@ -43,6 +44,57 @@ export default function Dashboard() {
     }
   };
 
+  // Stable callbacks for WebSocket using useCallback
+  const handlePlantUpdate = useCallback((data: { plantId: number; waterLevel: number; isDead: boolean; name: string }) => {
+    console.log('📊 Updating plant:', data);
+    
+    // Update plant water level in real-time
+    setPlants(prevPlants => 
+      prevPlants.map(plant => 
+        plant.id === data.plantId 
+          ? { ...plant, currentWater: data.waterLevel, isDead: data.isDead }
+          : plant
+      )
+    );
+    
+    // If plant died, move it to dead plants
+    if (data.isDead) {
+      setPlants(prevPlants => {
+        const deadPlant = prevPlants.find(p => p.id === data.plantId);
+        if (deadPlant) {
+          setDeadPlants(prevDead => [...prevDead, { ...deadPlant, isDead: true, currentWater: 0 }]);
+          return prevPlants.filter(p => p.id !== data.plantId);
+        }
+        return prevPlants;
+      });
+    }
+  }, []);
+
+  const handlePlantDied = useCallback((data: { plantId: number; name: string }) => {
+    console.log('💀 Plant died notification:', data);
+    alert(`💀 Plant "${data.name}" has died! Water your plants regularly!`);
+    fetchData(); // Refresh to get updated lists
+  }, []);
+
+  const handlePlantWatered = useCallback((data: { plantId: number; waterLevel: number }) => {
+    console.log('💧 Plant watered notification:', data);
+    // Update water level after watering
+    setPlants(prevPlants =>
+      prevPlants.map(plant =>
+        plant.id === data.plantId
+          ? { ...plant, currentWater: data.waterLevel }
+          : plant
+      )
+    );
+  }, []);
+
+  // WebSocket connection for real-time updates
+  useWebSocket({
+    onPlantUpdate: handlePlantUpdate,
+    onPlantDied: handlePlantDied,
+    onPlantWatered: handlePlantWatered,
+  });
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -62,8 +114,10 @@ export default function Dashboard() {
     try {
       await plantsApi.create({ name, speciesId });
       fetchData();
-    } catch (error) {
-      console.error('Failed to add plant');
+      alert('Plant added successfully! 🌱');
+    } catch (error: any) {
+      console.error('Failed to add plant', error);
+      alert(error.response?.data?.error || 'Failed to add plant. Please try again.');
     }
   };
 
@@ -95,6 +149,9 @@ export default function Dashboard() {
             <span>Welcome, {user?.username}!</span>
             <Link to="/species" className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded">
               🌿 Manage Species
+            </Link>
+            <Link to="/logs" className="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded">
+              📋 View Logs
             </Link>
             <button
               onClick={logout}

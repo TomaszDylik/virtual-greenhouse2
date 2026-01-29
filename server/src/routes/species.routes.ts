@@ -37,12 +37,23 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { name, dryingRate } = req.body;
+    
+    if (!name || dryingRate === undefined || dryingRate === null) {
+      return res.status(400).json({ error: 'Name and dryingRate are required' });
+    }
+    
+    const parsedRate = parseFloat(dryingRate);
+    if (isNaN(parsedRate) || parsedRate < 0) {
+      return res.status(400).json({ error: 'Invalid drying rate' });
+    }
+    
     const species = await prisma.species.create({
-      data: { name, dryingRate: parseFloat(dryingRate) },
+      data: { name, dryingRate: parsedRate },
     });
     logger.info(`Species created: ${name}`);
     res.status(201).json(species);
   } catch (error) {
+    logger.error(`Failed to create species: ${error}`);
     res.status(500).json({ error: 'Failed to create species' });
   }
 });
